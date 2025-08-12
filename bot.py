@@ -440,8 +440,20 @@ async def send_reminders(app):
             pass
 
 # ====== MAIN & SETUP ======
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+async def post_init(application):
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(check_expiries, "interval", minutes=2, args=[application])
+    scheduler.add_job(send_reminders, "interval", hours=1, args=[application])
+    scheduler.start()
+    logger.info("Scheduler started.")
+
+def main():
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)  # hook for scheduler
+        .build()
+    )
 
     # user handlers
     app.add_handler(CommandHandler("start", start))
@@ -456,15 +468,9 @@ async def main():
     app.add_handler(CommandHandler("history", history_cmd))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
-    # scheduler — use current loop
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(check_expiries, "interval", minutes=2, args=[app])
-    scheduler.add_job(send_reminders, "interval", hours=1, args=[app])
-    scheduler.start()
-
     logger.info("Bot starting...")
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
+
